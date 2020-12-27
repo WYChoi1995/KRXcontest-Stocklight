@@ -29,9 +29,9 @@ class PreProcessor(object):
         self.priceData = {**self.kospiTickerData, **self.kosdaqTickerData}
 
         self.get_delta_price_score()
-        self.get_volume_score()
         self.get_sigma_score()
         self.get_rolling_beta(window=rollingWindow)
+        self.get_volume_score(window=rollingWindow)
 
     @staticmethod
     def get_price_change(data: DataFrame, lag: int):
@@ -68,9 +68,17 @@ class PreProcessor(object):
             except KeyError:
                 continue
 
-    def get_volume_score(self):
+    def get_volume_score(self, window=15):
         for ticker in self.tickers:
-            self.priceData[ticker]["VolumeScore"] = 3
+            self.priceData[ticker]["VolumeScore"] = nan
+            self.priceData[ticker].reset_index(inplace=True)
+
+            for indexNum, row in self.priceData[ticker].iterrows():
+                if indexNum < 15:
+                    pass
+
+                else:
+                    row["VolumeScore"] = row["Volume"] / self.priceData[ticker]["Volume"][indexNum-window: indexNum-1].max()
 
     def get_sigma_score(self):
         for ticker in self.tickers:
