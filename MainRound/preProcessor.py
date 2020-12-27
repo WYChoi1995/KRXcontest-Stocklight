@@ -78,7 +78,7 @@ class PreProcessor(object):
                     pass
 
                 else:
-                    row["VolumeScore"] = row["Volume"] / self.priceData[ticker]["Volume"][indexNum-window: indexNum-1].max()
+                    row["VolumeScore"] = row["Volume"] / self.priceData[ticker]["Volume"][indexNum-window: indexNum-1].median()
 
     def get_sigma_score(self):
         for ticker in self.tickers:
