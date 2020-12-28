@@ -1,13 +1,15 @@
 from FinanceDataReader import DataReader
+from numpy import where, absolute, inf, nan
+from pandas import DataFrame
 from statsmodels.api import add_constant
 from statsmodels.regression.rolling import RollingOLS
-from pandas import DataFrame
-from numpy import where, absolute, inf, nan
+
+from alertDataProcess import investAlertData
 
 
 class PreProcessor(object):
     def __init__(self, kospiTickers: list, kosdaqTickers: list, startDate: str, endDate: str,
-                 alertData: DataFrame, rollingWindow: int = 15) -> None:
+                 alertData: dict, rollingWindow: int = 15) -> None:
         self.startDate = startDate
         self.endDate = endDate
         self.kospiTickers = kospiTickers
@@ -100,4 +102,4 @@ class PreProcessor(object):
 
 if __name__ == "__main__":
     preProcessor = PreProcessor(kospiTickers=["005930"], kosdaqTickers=["323990"], startDate="2011-01-01", endDate="2020-12-31",
-                                alertData=DataReader("005930", "2018-01-31", "2019-02-03"), rollingWindow=15)
+                                alertData=investAlertData, rollingWindow=15)

@@ -1,4 +1,5 @@
 from FinanceDataReader import StockListing, DataReader
+
 from preProcessor import PreProcessor
 
 kospiCode = [ticker for ticker in StockListing("KOSPI")["Symbol"] if len(ticker) <= 6]
