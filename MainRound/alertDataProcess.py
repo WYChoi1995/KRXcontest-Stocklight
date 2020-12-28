@@ -58,6 +58,6 @@ def process_alert_data(path: str, level: AlertLevel):
     return resultDict
 
 
-investAlertData = {"InvestCaution": process_alert_data("./alertData/investCaution.csv", AlertLevel.CAUTION),
-                   "InvestWarning": process_alert_data("./alertData/investWarning.csv", AlertLevel.WARNING),
-                   "InvestDanger": process_alert_data("./alertData/investDanger.csv", AlertLevel.DANGER)}
+investAlertData = {"InvestCaution": process_alert_data("./alertData/investCaution1620.csv", AlertLevel.CAUTION),
+                   "InvestWarning": process_alert_data("./alertData/investWarning1620.csv", AlertLevel.WARNING),
+                   "InvestDanger": process_alert_data("./alertData/investDanger1620.csv", AlertLevel.DANGER)}

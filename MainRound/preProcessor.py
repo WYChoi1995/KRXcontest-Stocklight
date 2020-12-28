@@ -30,6 +30,7 @@ class PreProcessor(object):
 
         self.tickers = self.kospiTickers + self.kosdaqTickers
         self.priceData = {**self.kospiTickerData, **self.kosdaqTickerData}
+        self.variableList = ["RollingBeta", "DeltaScore", "VolumeScore", "SigmaScore", "Multinomial"]
 
         '''Get independent variables'''
         self.get_delta_price_score()
@@ -39,7 +40,7 @@ class PreProcessor(object):
 
         '''Get dependent variables'''
         self.label_alert_data()
-        self.concatenatedData = self.concatenate_data()
+        self.concatenatedData = self.concatenate_data(variableList=self.variableList)
 
     @staticmethod
     def get_price_change(data: DataFrame, lag: int):
@@ -69,8 +70,8 @@ class PreProcessor(object):
             return 1
 
     def split_train_test(self, splitDate: str):
-        trainData = {ticker: self.priceData[ticker].loc[self.priceData[ticker].index <= splitDate] for ticker in self.tickers}
-        testData = {ticker: self.priceData[ticker].loc[self.priceData[ticker].index > splitDate] for ticker in self.tickers}
+        trainData = self.concatenatedData.loc[self.concatenatedData.index <= splitDate]
+        testData = self.concatenatedData.loc[self.concatenatedData.index > splitDate]
 
         return trainData, testData
 
@@ -104,13 +105,17 @@ class PreProcessor(object):
     def get_rolling_beta(self, window: int):
         for ticker in self.tickers:
             try:
-                exogVariable = add_constant(self.priceData[ticker]["IndexChange"])
-                endogVariable = self.priceData[ticker]["Change"]
-                rollingOLSModel = RollingOLS(endogVariable, exogVariable, window).fit()
+                if len(self.priceData[ticker]) > window:
+                    exogVariable = add_constant(self.priceData[ticker]["IndexChange"])
+                    endogVariable = self.priceData[ticker]["Change"]
+                    rollingOLSModel = RollingOLS(endogVariable, exogVariable, window).fit()
 
-                self.priceData[ticker]["RollingBeta"] = rollingOLSModel.params["IndexChange"]
+                    self.priceData[ticker]["RollingBeta"] = rollingOLSModel.params["IndexChange"]
 
-            except IndexError or ValueError:
+                else:
+                    self.priceData[ticker]["RollingBeta"] = nan
+
+            except ValueError:
                 self.priceData[ticker]["RollingBeta"] = nan
 
     def give_label(self, alertLevel: str, labelValue: int):
@@ -136,9 +141,9 @@ class PreProcessor(object):
         for alertLevel, labelValue in self.alertLabel.items():
             self.give_label(alertLevel, labelValue)
 
-    def concatenate_data(self):
+    def concatenate_data(self, variableList: list):
         tickerData = {**self.kospiTickerData, **self.kosdaqTickerData}
-        concatenatedData = concat([tickerData[ticker] for ticker in tickerData.keys()])
+        concatenatedData = concat([tickerData[ticker][variableList] for ticker in self.tickers])
         concatenatedData["Binomial"] = concatenatedData["Multinomial"].map(lambda label: self.get_binomial_from_multinomial(label))
 
         return concatenatedData.dropna()
