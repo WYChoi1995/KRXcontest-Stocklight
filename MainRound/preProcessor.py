@@ -103,11 +103,15 @@ class PreProcessor(object):
 
     def get_rolling_beta(self, window: int):
         for ticker in self.tickers:
-            exogVariable = add_constant(self.priceData[ticker]["IndexChange"])
-            endogVariable = self.priceData[ticker]["Change"]
-            rollingOLSModel = RollingOLS(endogVariable, exogVariable, window).fit()
+            try:
+                exogVariable = add_constant(self.priceData[ticker]["IndexChange"])
+                endogVariable = self.priceData[ticker]["Change"]
+                rollingOLSModel = RollingOLS(endogVariable, exogVariable, window).fit()
 
-            self.priceData[ticker]["RollingBeta"] = rollingOLSModel.params["IndexChange"]
+                self.priceData[ticker]["RollingBeta"] = rollingOLSModel.params["IndexChange"]
+
+            except IndexError or ValueError:
+                self.priceData[ticker]["RollingBeta"] = nan
 
     def give_label(self, alertLevel: str, labelValue: int):
         try:
@@ -137,4 +141,4 @@ class PreProcessor(object):
         concatenatedData = concat([tickerData[ticker] for ticker in tickerData.keys()])
         concatenatedData["Binomial"] = concatenatedData["Multinomial"].map(lambda label: self.get_binomial_from_multinomial(label))
 
-        return concatenatedData
+        return concatenatedData.dropna()
