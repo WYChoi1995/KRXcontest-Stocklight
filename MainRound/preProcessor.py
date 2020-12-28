@@ -119,9 +119,9 @@ class PreProcessor(object):
                 self.priceData[ticker]["RollingBeta"] = nan
 
     def give_label(self, alertLevel: str, labelValue: int):
-        try:
-            for ticker, dateList in self.alertData[alertLevel].items():
-                if ticker in self.tickers:
+        for ticker, dateList in self.alertData[alertLevel].items():
+            if ticker in self.tickers:
+                try:
                     data = self.priceData[ticker]
 
                     for date in dateList:
@@ -131,11 +131,11 @@ class PreProcessor(object):
                         else:
                             data.loc[(data.index >= date[0]) & (data.index <= date[1]), "Multinomial"] = labelValue
 
-                else:
+                except KeyError:
                     pass
 
-        except KeyError:
-            pass
+            else:
+                pass
 
     def label_alert_data(self):
         for alertLevel, labelValue in self.alertLabel.items():
