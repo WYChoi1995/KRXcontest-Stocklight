@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import IntEnum
 
 from pandas import read_csv
@@ -36,14 +37,23 @@ def process_alert_data(path: str, level: AlertLevel):
 
     else:
         alertData = givenData[[IssueCode, DesignatedDate, ReleaseDate]]
+        todayString = datetime.today().strftime("%Y-%m-%d")
         resultDict = {}
 
         for indexNum, row in alertData.iterrows():
             if row[IssueCode] in resultDict.keys():
-                resultDict[row[IssueCode]].append([row[DesignatedDate], row[ReleaseDate]])
+                if row[ReleaseDate] == "-":
+                    resultDict[row[IssueCode]].append([row[DesignatedDate], todayString])
+
+                else:
+                    resultDict[row[IssueCode]].append([row[DesignatedDate], row[ReleaseDate]])
 
             else:
-                resultDict[row[IssueCode]] = [[row[DesignatedDate], row[ReleaseDate]]]
+                if row[ReleaseDate] == "-":
+                    resultDict[row[IssueCode]] = [[row[DesignatedDate], todayString]]
+
+                else:
+                    resultDict[row[IssueCode]] = [[row[DesignatedDate], row[ReleaseDate]]]
 
     return resultDict
 

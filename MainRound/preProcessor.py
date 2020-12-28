@@ -1,10 +1,8 @@
 from FinanceDataReader import DataReader
 from numpy import where, absolute, inf, nan
-from pandas import DataFrame
+from pandas import DataFrame, concat
 from statsmodels.api import add_constant
 from statsmodels.regression.rolling import RollingOLS
-
-from alertDataProcess import investAlertData
 
 
 class PreProcessor(object):
@@ -15,25 +13,33 @@ class PreProcessor(object):
         self.kospiTickers = kospiTickers
         self.kosdaqTickers = kosdaqTickers
         self.alertData = alertData
+        self.alertLabel = {"InvestCaution": 1, "InvestWarning": 2, "InvestDanger": 3}
         self.kospiIndex = DataReader("KS11", start=self.startDate, end=self.endDate)
         self.kosdaqIndex = DataReader("KQ11", start=self.startDate, end=self.endDate)
 
-        self.kospiTickerData = {ticker: DataReader(ticker, start=self.startDate, end=self.endDate) for ticker in kospiTickers}
-        self.kosdaqTickerData = {ticker: DataReader(ticker, start=self.startDate, end=self.endDate) for ticker in kosdaqTickers}
+        self.kospiTickerData = {ticker: self.drop_trading_halt_day(DataReader(ticker, start=self.startDate, end=self.endDate)) for ticker in kospiTickers}
+        self.kosdaqTickerData = {ticker: self.drop_trading_halt_day(DataReader(ticker, start=self.startDate, end=self.endDate)) for ticker in kosdaqTickers}
 
         for ticker in self.kospiTickers:
             self.kospiTickerData[ticker]["IndexChange"] = self.kospiIndex["Change"]
+            self.kospiTickerData[ticker]["Multinomial"] = 0
 
         for ticker in self.kosdaqTickers:
             self.kosdaqTickerData[ticker]["IndexChange"] = self.kosdaqIndex["Change"]
+            self.kosdaqTickerData[ticker]["Multinomial"] = 0
 
         self.tickers = self.kospiTickers + self.kosdaqTickers
         self.priceData = {**self.kospiTickerData, **self.kosdaqTickerData}
 
+        '''Get independent variables'''
         self.get_delta_price_score()
         self.get_sigma_score()
         self.get_rolling_beta(window=rollingWindow)
         self.get_volume_score(window=rollingWindow)
+
+        '''Get dependent variables'''
+        self.label_alert_data()
+        self.concatenatedData = self.concatenate_data()
 
     @staticmethod
     def get_price_change(data: DataFrame, lag: int):
@@ -50,6 +56,18 @@ class PreProcessor(object):
 
         return trRatio
 
+    @staticmethod
+    def drop_trading_halt_day(data: DataFrame):
+        return data.replace(0, nan).dropna()
+
+    @staticmethod
+    def get_binomial_from_multinomial(label):
+        if label == 0:
+            return label
+
+        else:
+            return 1
+
     def split_train_test(self, splitDate: str):
         trainData = {ticker: self.priceData[ticker].loc[self.priceData[ticker].index <= splitDate] for ticker in self.tickers}
         testData = {ticker: self.priceData[ticker].loc[self.priceData[ticker].index > splitDate] for ticker in self.tickers}
@@ -65,22 +83,14 @@ class PreProcessor(object):
         for ticker in self.tickers:
             try:
                 maxChangeDict = self.get_delta(self.priceData[ticker])
-                self.priceData[ticker]["DeltaScore"] = 100 * DataFrame(maxChangeDict).dropna().max(axis=1)
+                self.priceData[ticker]["DeltaScore"] = DataFrame(maxChangeDict).dropna().max(axis=1)
 
             except KeyError:
                 continue
 
     def get_volume_score(self, window=15):
         for ticker in self.tickers:
-            self.priceData[ticker]["VolumeScore"] = nan
-            self.priceData[ticker].reset_index(inplace=True)
-
-            for indexNum, row in self.priceData[ticker].iterrows():
-                if indexNum < 15:
-                    pass
-
-                else:
-                    row["VolumeScore"] = row["Volume"] / self.priceData[ticker]["Volume"][indexNum-window: indexNum-1].median()
+            self.priceData[ticker]["VolumeScore"] = self.priceData[ticker]["Volume"] / self.priceData[ticker]["Volume"].shift(1).rolling(window=window).median()
 
     def get_sigma_score(self):
         for ticker in self.tickers:
@@ -99,7 +109,32 @@ class PreProcessor(object):
 
             self.priceData[ticker]["RollingBeta"] = rollingOLSModel.params["IndexChange"]
 
+    def give_label(self, alertLevel: str, labelValue: int):
+        try:
+            for ticker, dateList in self.alertData[alertLevel].items():
+                if ticker in self.tickers:
+                    data = self.priceData[ticker]
 
-if __name__ == "__main__":
-    preProcessor = PreProcessor(kospiTickers=["005930"], kosdaqTickers=["323990"], startDate="2011-01-01", endDate="2020-12-31",
-                                alertData=investAlertData, rollingWindow=15)
+                    for date in dateList:
+                        if date[0] == date[1]:
+                            data.loc[data.index == date[0], "Multinomial"] = labelValue
+
+                        else:
+                            data.loc[(data.index >= date[0]) & (data.index <= date[1]), "Multinomial"] = labelValue
+
+                else:
+                    pass
+
+        except KeyError:
+            pass
+
+    def label_alert_data(self):
+        for alertLevel, labelValue in self.alertLabel.items():
+            self.give_label(alertLevel, labelValue)
+
+    def concatenate_data(self):
+        tickerData = {**self.kospiTickerData, **self.kosdaqTickerData}
+        concatenatedData = concat([tickerData[ticker] for ticker in tickerData.keys()])
+        concatenatedData["Binomial"] = concatenatedData["Multinomial"].map(lambda label: self.get_binomial_from_multinomial(label))
+
+        return concatenatedData

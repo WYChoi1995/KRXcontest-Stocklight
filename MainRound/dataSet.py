@@ -1,9 +1,13 @@
-from FinanceDataReader import StockListing, DataReader
-
+from FinanceDataReader import StockListing
 from preProcessor import PreProcessor
+from alertDataProcess import investAlertData
 
 kospiCode = [ticker for ticker in StockListing("KOSPI")["Symbol"] if len(ticker) <= 6]
 kosdaqCode = [ticker for ticker in StockListing("KOSDAQ")["Symbol"] if len(ticker) <= 6]
 
-priceData = PreProcessor(kospiTickers=["005930"], kosdaqTickers=["323990"], startDate="2011-01-01", endDate="2020-12-31",
-                         alertData=DataReader("005930", "2018-01-31", "2019-02-03"), rollingWindow=15)
+processor = PreProcessor(kospiTickers=kospiCode, kosdaqTickers=kosdaqCode, startDate="2011-01-01", endDate="2020-12-31",
+                             alertData=investAlertData, rollingWindow=15)
+
+dataSet = processor.split_train_test("2018-12-31")
+trainSet = dataSet[0]
+testSet = dataSet[1]
