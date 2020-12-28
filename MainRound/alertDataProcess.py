@@ -21,7 +21,7 @@ def process_ticker(ticker):
 
 def process_alert_data(path: str, level: AlertLevel):
     givenData = read_csv(path, encoding='cp949', dtype={IssueCode: str})
-    givenData[IssueCode] = givenData[IssueCode].map(lambda ticker: process_ticker(ticker))
+    givenData[IssueCode] = givenData[IssueCode].map(lambda ticker: process_ticker(ticker=ticker))
 
     if level == AlertLevel.CAUTION:
         alertData = givenData[[IssueCode, DesignatedDate]]
@@ -48,6 +48,6 @@ def process_alert_data(path: str, level: AlertLevel):
     return resultDict
 
 
-investAlertData = {"InvestCaution": process_alert_data("./alertData/investDanger.csv", AlertLevel.CAUTION),
-                   "InvestWarning": process_alert_data("./alertData/investDanger.csv", AlertLevel.WARNING),
+investAlertData = {"InvestCaution": process_alert_data("./alertData/investCaution.csv", AlertLevel.CAUTION),
+                   "InvestWarning": process_alert_data("./alertData/investWarning.csv", AlertLevel.WARNING),
                    "InvestDanger": process_alert_data("./alertData/investDanger.csv", AlertLevel.DANGER)}
