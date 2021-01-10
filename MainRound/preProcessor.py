@@ -1,13 +1,13 @@
 from FinanceDataReader import DataReader
 from numpy import where, absolute, inf, nan
-from pandas import DataFrame, concat
+from pandas import DataFrame, concat, read_csv, to_datetime
 from statsmodels.api import add_constant
 from statsmodels.regression.rolling import RollingOLS
 
 
 class PreProcessor(object):
-    def __init__(self, kospiTickers: list, kosdaqTickers: list, startDate: str, endDate: str,
-                 alertData: dict, rollingWindow: int = 15) -> None:
+    def __init__(self, kospiTickers: list, kosdaqTickers: list, alertData: dict, startDate: str = "2016-01-01", endDate: str = "2020-12-30",
+                 rollingWindow: int = 15) -> None:
         self.startDate = startDate
         self.endDate = endDate
         self.kospiTickers = kospiTickers
@@ -16,21 +16,29 @@ class PreProcessor(object):
         self.alertLabel = {"InvestCaution": 1, "InvestWarning": 2, "InvestDanger": 3}
         self.kospiIndex = DataReader("KS11", start=self.startDate, end=self.endDate)
         self.kosdaqIndex = DataReader("KQ11", start=self.startDate, end=self.endDate)
+        self.riskFree = read_csv("./csvData/riskFree.csv", index_col="Date")
+        self.riskFree.index = to_datetime(self.riskFree.index)
 
-        self.kospiTickerData = {ticker: self.drop_trading_halt_day(DataReader(ticker, start=self.startDate, end=self.endDate)) for ticker in kospiTickers}
-        self.kosdaqTickerData = {ticker: self.drop_trading_halt_day(DataReader(ticker, start=self.startDate, end=self.endDate)) for ticker in kosdaqTickers}
+        self.priceDataKOSPI = {ticker: self.drop_trading_halt_day(DataReader(ticker, start=self.startDate, end=self.endDate))
+                               for ticker in kospiTickers}
+        self.priceDataKOSDAQ = {ticker: self.drop_trading_halt_day(DataReader(ticker, start=self.startDate, end=self.endDate))
+                                for ticker in kosdaqTickers}
 
         for ticker in self.kospiTickers:
-            self.kospiTickerData[ticker]["IndexChange"] = self.kospiIndex["Change"]
-            self.kospiTickerData[ticker]["Multinomial"] = 0
+            self.priceDataKOSPI[ticker]["IssueCode"] = "A" + ticker
+            self.priceDataKOSPI[ticker]["IndexRiskPremium"] = (self.kospiIndex["Change"] - self.riskFree["RiskFree"]).dropna()
+            self.priceDataKOSPI[ticker]["RiskPremium"] = (self.priceDataKOSPI[ticker]["Change"] - self.riskFree["RiskFree"]).dropna()
+            self.priceDataKOSPI[ticker]["Multinomial"] = 0
 
         for ticker in self.kosdaqTickers:
-            self.kosdaqTickerData[ticker]["IndexChange"] = self.kosdaqIndex["Change"]
-            self.kosdaqTickerData[ticker]["Multinomial"] = 0
+            self.priceDataKOSDAQ[ticker]["IssueCode"] = "A" + ticker
+            self.priceDataKOSDAQ[ticker]["IndexRiskPremium"] = (self.kosdaqIndex["Change"] - self.riskFree["RiskFree"]).dropna()
+            self.priceDataKOSDAQ[ticker]["RiskPremium"] = (self.priceDataKOSDAQ[ticker]["Change"] - self.riskFree["RiskFree"]).dropna()
+            self.priceDataKOSDAQ[ticker]["Multinomial"] = 0
 
         self.tickers = self.kospiTickers + self.kosdaqTickers
-        self.priceData = {**self.kospiTickerData, **self.kosdaqTickerData}
-        self.variableList = ["RollingBeta", "DeltaScore", "VolumeScore", "SigmaScore", "Multinomial"]
+        self.priceData = {**self.priceDataKOSPI, **self.priceDataKOSDAQ}
+        self.variableList = ["IssueCode", "RollingBeta", "DeltaScore", "VolumeScore", "SigmaScore", "Multinomial"]
 
         '''Get independent variables'''
         self.get_delta_price_score()
@@ -106,11 +114,11 @@ class PreProcessor(object):
         for ticker in self.tickers:
             try:
                 if len(self.priceData[ticker]) > window:
-                    exogVariable = add_constant(self.priceData[ticker]["IndexChange"])
-                    endogVariable = self.priceData[ticker]["Change"]
+                    exogVariable = add_constant(self.priceData[ticker]["IndexRiskPremium"])
+                    endogVariable = self.priceData[ticker]["RiskPremium"]
                     rollingOLSModel = RollingOLS(endogVariable, exogVariable, window).fit()
 
-                    self.priceData[ticker]["RollingBeta"] = rollingOLSModel.params["IndexChange"]
+                    self.priceData[ticker]["RollingBeta"] = rollingOLSModel.params["IndexRiskPremium"]
 
                 else:
                     self.priceData[ticker]["RollingBeta"] = nan
@@ -142,7 +150,7 @@ class PreProcessor(object):
             self.give_label(alertLevel, labelValue)
 
     def concatenate_data(self, variableList: list):
-        tickerData = {**self.kospiTickerData, **self.kosdaqTickerData}
+        tickerData = {**self.priceDataKOSPI, **self.priceDataKOSDAQ}
         concatenatedData = concat([tickerData[ticker][variableList] for ticker in self.tickers])
         concatenatedData["Binomial"] = concatenatedData["Multinomial"].map(lambda label: self.get_binomial_from_multinomial(label))
 
