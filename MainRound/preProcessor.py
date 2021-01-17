@@ -16,7 +16,9 @@ class PreProcessor(object):
         self.alertLabel = {"InvestCaution": 1, "InvestWarning": 2, "InvestDanger": 3}
         self.kospiIndex = DataReader("KS11", start=self.startDate, end=self.endDate)
         self.kosdaqIndex = DataReader("KQ11", start=self.startDate, end=self.endDate)
+        self.turnover = read_csv("./csvData/turnover.csv", index_col="Date")
         self.riskFree = read_csv("./csvData/riskFree.csv", index_col="Date")
+        self.turnover.index = to_datetime(self.turnover.index)
         self.riskFree.index = to_datetime(self.riskFree.index)
 
         self.priceDataKOSPI = {ticker: self.drop_trading_halt_day(DataReader(ticker, start=self.startDate, end=self.endDate))
@@ -29,22 +31,24 @@ class PreProcessor(object):
             self.priceDataKOSPI[ticker]["IndexRiskPremium"] = (self.kospiIndex["Change"] - self.riskFree["RiskFree"]).dropna()
             self.priceDataKOSPI[ticker]["RiskPremium"] = (self.priceDataKOSPI[ticker]["Change"] - self.riskFree["RiskFree"]).dropna()
             self.priceDataKOSPI[ticker]["Multinomial"] = 0
+            self.priceDataKOSPI[ticker]["TurnOver"] = nan
 
         for ticker in self.kosdaqTickers:
             self.priceDataKOSDAQ[ticker]["IssueCode"] = "A" + ticker
             self.priceDataKOSDAQ[ticker]["IndexRiskPremium"] = (self.kosdaqIndex["Change"] - self.riskFree["RiskFree"]).dropna()
             self.priceDataKOSDAQ[ticker]["RiskPremium"] = (self.priceDataKOSDAQ[ticker]["Change"] - self.riskFree["RiskFree"]).dropna()
             self.priceDataKOSDAQ[ticker]["Multinomial"] = 0
+            self.priceDataKOSDAQ[ticker]["TurnOver"] = nan
 
         self.tickers = self.kospiTickers + self.kosdaqTickers
         self.priceData = {**self.priceDataKOSPI, **self.priceDataKOSDAQ}
-        self.variableList = ["IssueCode", "RollingBeta", "DeltaScore", "VolumeScore", "SigmaScore", "Multinomial"]
+        self.variableList = ["IssueCode", "RollingBeta", "DeltaScore", "TurnOver", "SigmaScore", "Multinomial"]
 
         '''Get independent variables'''
         self.get_delta_price_score()
         self.get_sigma_score()
         self.get_rolling_beta(window=rollingWindow)
-        self.get_volume_score(window=rollingWindow)
+        self.get_turnover()
 
         '''Get dependent variables'''
         self.label_alert_data()
@@ -77,12 +81,6 @@ class PreProcessor(object):
         else:
             return 1
 
-    def split_train_test(self, splitDate: str):
-        trainData = self.concatenatedData.loc[self.concatenatedData.index <= splitDate]
-        testData = self.concatenatedData.loc[self.concatenatedData.index > splitDate]
-
-        return trainData, testData
-
     def get_delta(self, data):
         return {"3D": self.get_price_change(data, 3),
                 "5D": self.get_price_change(data, 5),
@@ -97,9 +95,13 @@ class PreProcessor(object):
             except KeyError:
                 continue
 
-    def get_volume_score(self, window=15):
+    def get_turnover(self):
         for ticker in self.tickers:
-            self.priceData[ticker]["VolumeScore"] = self.priceData[ticker]["Volume"] / self.priceData[ticker]["Volume"].shift(1).rolling(window=window).median()
+            try:
+                self.priceData[ticker]["TurnOver"] = self.turnover.loc[self.turnover["IssueCode"] == "A" + ticker, "TurnOver"]
+
+            except KeyError:
+                pass
 
     def get_sigma_score(self):
         for ticker in self.tickers:
