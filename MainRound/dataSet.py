@@ -1,21 +1,10 @@
-from FinanceDataReader import StockListing
-from pandas import DataFrame
+from pandas import read_csv
 
-from alertDataProcess import investAlertData
-from korToEng import SPAC
-from preProcessor import PreProcessor
+tickerData = read_csv("./csvData/firmList.csv", encoding="cp949")
 
-
-def eliminate_spac(stockListed: DataFrame):
-    return stockListed[~stockListed["Name"].str.contains(SPAC)]
-
-
-kospiList = eliminate_spac(StockListing("KOSPI").dropna())
-kosdaqList = eliminate_spac(StockListing("KOSDAQ").dropna())
-
-kospiCode = [ticker for ticker in kospiList["Symbol"] if len(ticker) <= 6]
-kosdaqCode = [ticker for ticker in kosdaqList["Symbol"] if len(ticker) <= 6]
-
+kospiCode= [ticker for ticker in tickerData.loc[tickerData["Market"] == "KOSPI", "Symbol"].zfill(6)]
+kosdaqCode= [ticker for ticker in tickerData.loc[tickerData["Market"] == "KOSDAQ", "Symbol"].zfill(6)]
+                                                
 processor = PreProcessor(kospiTickers=kospiCode, kosdaqTickers=kosdaqCode, startDate="2016-01-01", endDate="2020-12-30",
                          alertData=investAlertData, rollingWindow=15)
 
