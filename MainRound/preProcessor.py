@@ -22,18 +22,18 @@ class PreProcessor(object):
         self.riskFree.index = to_datetime(self.riskFree.index)
 
         self.priceDataKOSPI = {ticker: self.drop_trading_halt_day(DataReader(ticker, start=self.startDate, end=self.endDate))
-                               for ticker in kospiTickers}
+                               for ticker in self.kospiTickers}
         self.priceDataKOSDAQ = {ticker: self.drop_trading_halt_day(DataReader(ticker, start=self.startDate, end=self.endDate))
-                                for ticker in kosdaqTickers}
+                                for ticker in self.kosdaqTickers}
 
-        for ticker in self.kospiTickers:
+        for ticker in self.priceDataKOSPI.keys():
             self.priceDataKOSPI[ticker]["IssueCode"] = "A" + ticker
             self.priceDataKOSPI[ticker]["IndexRiskPremium"] = (self.kospiIndex["Change"] - self.riskFree["RiskFree"]).dropna()
             self.priceDataKOSPI[ticker]["RiskPremium"] = (self.priceDataKOSPI[ticker]["Change"] - self.riskFree["RiskFree"]).dropna()
             self.priceDataKOSPI[ticker]["Multinomial"] = 0
             self.priceDataKOSPI[ticker]["TurnOver"] = nan
 
-        for ticker in self.kosdaqTickers:
+        for ticker in self.priceDataKOSDAQ.keys():
             self.priceDataKOSDAQ[ticker]["IssueCode"] = "A" + ticker
             self.priceDataKOSDAQ[ticker]["IndexRiskPremium"] = (self.kosdaqIndex["Change"] - self.riskFree["RiskFree"]).dropna()
             self.priceDataKOSDAQ[ticker]["RiskPremium"] = (self.priceDataKOSDAQ[ticker]["Change"] - self.riskFree["RiskFree"]).dropna()
@@ -120,7 +120,7 @@ class PreProcessor(object):
                     endogVariable = self.priceData[ticker]["RiskPremium"]
                     rollingOLSModel = RollingOLS(endogVariable, exogVariable, window).fit()
 
-                    self.priceData[ticker]["RollingBeta"] = rollingOLSModel.params["IndexRiskPremium"]
+                    self.priceData[ticker]["RollingBeta"] = rollingOLSModel.params["IndexRiskPremium"].abs()
 
                 else:
                     self.priceData[ticker]["RollingBeta"] = nan
